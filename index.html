@@ -98,15 +98,17 @@ const SECTIONS={
   M:{nom:'Moyens',enfants:12,min:2,col:'var(--M)'},
   G:{nom:'Grands',enfants:12,min:2,col:'var(--G)'}
 };
-/* Équipe fictive. En production, cette liste et les codes viennent de la feuille « Equipe ». */
-const STAFF=[
+/* Équipe fictive, utilisée seulement tant qu'aucun Sheet n'est relié (mode essai).
+   Dès qu'un Sheet est relié, l'équipe et les codes viennent de ses onglets « Equipe » et « Reglages ». */
+const DEMO_STAFF=[
   {id:'s1',nom:'Alice',pin:'1111'},
   {id:'s2',nom:'Bénédicte',pin:'2222'},
   {id:'s3',nom:'Chloé',pin:'3333'},
   {id:'s4',nom:'Dorothée',pin:'4444'},
   {id:'s5',nom:'Emma',pin:'5555'}
 ];
-const DIRECTION_PIN='0000';
+let STAFF=DEMO_STAFF.slice();
+let DIRECTION_PIN='0000';
 const MOMENTS=['Ouverture','Matinée','Midi','Après-midi','Fermeture','Chaque semaine'];
 /* f : j = chaque jour, s = chaque semaine. sec : sections concernées (P, M, G). */
 const T=(id,m,l,f,sec)=>({id,m,l,f:f||'j',sec:sec||'PMG'});
@@ -154,9 +156,16 @@ const scopeOf=(t,dateStr)=>t.f==='s'?isoWeek(parse(dateStr)):dateStr;
 
 /* ===== Données locales ===== */
 const LS='creche_pointage_v1';
-function init(){return{punches:[],ticks:[],queue:[],cfg:{section:null,url:'',key:''}}}
+function init(){return{punches:[],ticks:[],queue:[],staff:[],dirPin:null,cfg:{section:null,url:'',key:''}}}
 function load(){try{const x=JSON.parse(localStorage.getItem(LS));return x&&x.punches?x:init()}catch(e){return init()}}
 let DB=load();
+DB.staff=DB.staff||[];
+/* Relié à un Sheet : équipe et codes du Sheet (gardés en mémoire sur la tablette). Sinon : mode essai. */
+function applyStaff(){
+  if(DB.cfg.url){STAFF=DB.staff.slice();DIRECTION_PIN=DB.dirPin||null}
+  else{STAFF=DEMO_STAFF.slice();DIRECTION_PIN='0000'}
+}
+applyStaff();
 function save(){try{localStorage.setItem(LS,JSON.stringify(DB))}catch(e){}}
 function enqueue(k,d){if(DB.cfg.url){DB.queue.push({k:k,d:d})}}
 
@@ -228,6 +237,16 @@ async function syncPull(){
     save();return true;
   }catch(e){return false}
 }
+let LAST_IGN=[];
+async function syncStaff(){
+  if(!DB.cfg.url)return false;
+  try{
+    const r=await fetch(DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+'action=staff&key='+encodeURIComponent(DB.cfg.key));
+    const j=await r.json();if(!j.ok)return false;
+    DB.staff=j.staff||[];DB.dirPin=j.dirPin||null;LAST_IGN=j.ignores||[];save();applyStaff();return true;
+  }catch(e){return false}
+}
+setInterval(()=>{syncStaff().then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()})},600000);
 setInterval(syncPush,60000);
 window.addEventListener('online',syncPush);
 
@@ -238,7 +257,7 @@ window.addEventListener('online',syncPush);
     if(q.get('section')&&SECTIONS[q.get('section')]){DB.cfg.section=q.get('section');ch=true}
     if(q.get('url')){DB.cfg.url=q.get('url');ch=true}
     if(q.get('key')){DB.cfg.key=q.get('key');ch=true}
-    if(ch){save();history.replaceState(null,'',location.pathname)}
+    if(ch){save();applyStaff();history.replaceState(null,'',location.pathname)}
   }catch(e){}
 })();
 
@@ -280,7 +299,7 @@ function vHome(){
 }
 function vPunch(){
   const k=DB.cfg.section,pm=presenceMap(ymd(new Date()));
-  return head('Qui pointe ?',SECTIONS[k].col,'home')+'<main><div class="grid">'+STAFF.map(s=>{
+  return head('Qui pointe ?',SECTIONS[k].col,'home')+'<main>'+(STAFF.some(s=>s.actif!==false)?'':'<div class="banner">Aucune employée enregistrée. La direction doit remplir l’onglet « Equipe » du Sheet, puis toucher Direction, Réglages et export, Recharger l’équipe.</div>')+'<div class="grid">'+STAFF.filter(s=>s.actif!==false).map(s=>{
     const p=pm[s.id];let cls='staff',sub='Arrivée';
     if(p&&p.type==='in'){
       if(p.section===k){cls+=' here';sub='Présente depuis '+hm(p.ts)+' · Départ'}
@@ -433,8 +452,8 @@ function bReglages(){
     opts(Object.keys(SECTIONS).map(k=>[k,SECTIONS[k].nom]),DB.cfg.section)+'</select></div>'+
   '<div class="card"><h2>Liaison avec le Google Sheet</h2><label>Adresse de l’application web (Apps Script)</label><input type="url" data-c="cfgurl" value="'+esc(DB.cfg.url)+'" placeholder="https://script.google.com/macros/s/…/exec">'+
     '<label>Clé secrète (la même que dans le script)</label><input type="text" data-c="cfgkey" value="'+esc(DB.cfg.key)+'">'+
-    '<div class="btns"><button data-a="syncnow">Synchroniser maintenant</button><button data-a="pull">Charger les données du Sheet</button></div>'+
-    '<p class="mut">En attente d’envoi : '+DB.queue.length+'</p></div>'+
+    '<div class="btns"><button data-a="syncnow">Synchroniser maintenant</button><button data-a="pull">Charger les données du Sheet</button><button data-a="staffreload">Recharger l’équipe</button></div>'+
+    '<p class="mut">En attente d’envoi : '+DB.queue.length+(DB.cfg.url?' · Équipe chargée : '+STAFF.length+' employée(s)':'')+'</p></div>'+
   cardLiens()+'<div class="card"><h2>Export CSV (Excel)</h2><div class="btns"><button data-a="exp" data-t="punch">Pointages</button><button data-a="exp" data-t="tasks">Tâches faites</button><button data-a="exp" data-t="hours">Heures de la semaine affichée</button></div></div>'+
   '<div class="card"><h2>Prototype</h2><div class="btns"><button data-a="demo">Générer des données de démonstration</button><button data-a="wipe">Effacer toutes les données de cette tablette</button></div>'+
     '<p class="mut">Codes de démonstration : employées 1111 à 5555 (dans l’ordre de la liste), direction 0000.</p></div>';
@@ -450,6 +469,7 @@ function render(){
 /* ===== Actions ===== */
 function check(){
   if(S.pinTarget==='dir'){
+    if(!DIRECTION_PIN){S.pin='';S.err='Code direction non chargé (Wi-Fi ?)';render();return}
     if(S.pin===DIRECTION_PIN){S.pin='';S.err='';S.dirDate=ymd(new Date());go('dir');return}
   }else{
     const s=staffById(S.pinTarget);
@@ -496,6 +516,7 @@ function exportCsv(t){
   }
 }
 function genDemo(){
+  if(DB.cfg.url){toast('Les données de démonstration ne sont possibles que sans liaison au Sheet');return}
   const asg={s1:'P',s2:'M',s3:'M',s4:'G',s5:'G'},now=Date.now(),rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
   const at=(d,m)=>new Date(d.getFullYear(),d.getMonth(),d.getDate(),Math.floor(m/60),m%60).getTime();
   const rng={Ouverture:[465,510],'Matinée':[540,690],Midi:[720,780],'Après-midi':[840,990],Fermeture:[1000,1050],'Chaque semaine':[600,900]};
@@ -523,7 +544,8 @@ function act(a,d){
   switch(a){
     case 'setsec':DB.cfg.section=d.k;save();go('home');break;
     case 'home':go('home');break;
-    case 'punch':go('punch');break;
+    case 'punch':go('punch');syncStaff().then(ok=>{if(ok&&S.view==='punch')render()});break;
+    case 'staffreload':syncStaff().then(ok=>{toast(ok?('Équipe chargée : '+STAFF.length+' employée(s)'+(LAST_IGN.length?'. Ignorée(s), code invalide : '+LAST_IGN.join(', '):'')):'Chargement impossible');render()});break;
     case 'tasks':go('tasks');break;
     case 'who':S.pinTarget=d.s;S.pin='';S.err='';go('pin');break;
     case 'dirlogin':S.pinTarget='dir';S.pin='';S.err='';go('pin');break;
@@ -583,11 +605,14 @@ app.addEventListener('change',e=>{
   else if(c==='cfgsec')DB.cfg.section=v;
   else if(c==='cfgurl')DB.cfg.url=v.trim();
   else if(c==='cfgkey')DB.cfg.key=v.trim();
-  save();render();
+  save();
+  if(c==='cfgurl'||c==='cfgkey'){applyStaff();syncStaff().then(()=>render())}
+  render();
 });
 setInterval(()=>{if(S.view==='home')render()},30000);
 render();
 syncPush();
+syncStaff().then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()});
 })();
 </script>
 </body>
