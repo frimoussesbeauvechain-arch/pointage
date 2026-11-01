@@ -112,10 +112,10 @@ const DEMO_STAFF=[
 ];
 let STAFF=DEMO_STAFF.slice();
 let DIRECTION_PIN='0000';
-const MOMENTS=['Ouverture','Matinée','Midi','Après-midi','Fermeture','Chaque semaine'];
-/* f : j = chaque jour, s = chaque semaine. sec : sections concernées (P, M, G). */
+/* f : j = chaque jour, s = chaque semaine. sec : sections concernées (P, M, G).
+   Cette liste sert de départ. Dès qu'un Sheet est relié, la liste vient de son onglet « Liste menage ». */
 const T=(id,m,l,f,sec)=>({id,m,l,f:f||'j',sec:sec||'PMG'});
-const TASKS=[
+const DEFAULT_TASKS=[
   T('o1','Ouverture','Aérer la pièce pendant 10 minutes'),
   T('o2','Ouverture','Vérifier savon, papier, gants et lingettes'),
   T('m1','Matinée','Désinfecter le plan de change et le matelas (fin de matinée)'),
@@ -138,7 +138,10 @@ const TASKS=[
   T('w5','Chaque semaine','Nettoyer le frigo de la section (lait, biberons)','s','P'),
   T('w6','Chaque semaine','Dépoussiérer rebords, plinthes et vitres basses','s')
 ];
+let TASKS=DEFAULT_TASKS.slice();
 const tasksFor=k=>TASKS.filter(t=>t.sec.includes(k));
+/* Moments de la journée, dans l'ordre où ils apparaissent dans la liste */
+const momentsOf=()=>{const s=[];TASKS.forEach(t=>{if(s.indexOf(t.m)<0)s.push(t.m)});return s};
 
 /* ===== Outils ===== */
 const pad=n=>String(n).padStart(2,'0');
@@ -159,7 +162,7 @@ const scopeOf=(t,dateStr)=>t.f==='s'?isoWeek(parse(dateStr)):dateStr;
 
 /* ===== Données locales ===== */
 const LS='creche_pointage_v1';
-function init(){return{punches:[],ticks:[],queue:[],staff:[],dirPin:null,cfg:{section:null,url:'',key:''}}}
+function init(){return{punches:[],ticks:[],queue:[],staff:[],dirPin:null,tasks:[],tasksLoaded:false,cfg:{section:null,url:'',key:''}}}
 function load(){try{const x=JSON.parse(localStorage.getItem(LS));return x&&x.punches?x:init()}catch(e){return init()}}
 let DB=load();
 DB.staff=DB.staff||[];
@@ -169,6 +172,9 @@ function applyStaff(){
      cela évite de se retrouver bloquée hors des réglages. Après le premier chargement, seul le code du Sheet est valable. */
   if(DB.cfg.url){STAFF=DB.staff.slice();DIRECTION_PIN=DB.staffLoaded?(DB.dirPin||null):'0000'}
   else{STAFF=DEMO_STAFF.slice();DIRECTION_PIN='0000'}
+  /* Liste des tâches : celle du Sheet une fois chargée, sinon la liste de départ */
+  if(DB.cfg.url&&DB.tasksLoaded&&Array.isArray(DB.tasks))TASKS=DB.tasks.map(t=>({id:String(t.id),m:String(t.m),l:String(t.l),f:t.f==='s'?'s':'j',sec:String(t.sec||'')}));
+  else TASKS=DEFAULT_TASKS.slice();
 }
 applyStaff();
 function save(){try{localStorage.setItem(LS,JSON.stringify(DB))}catch(e){}}
@@ -220,7 +226,7 @@ function dayStats(date,staff){
 }
 
 /* ===== Synchronisation avec le Google Sheet ===== */
-const APP_VERSION=4; /* doit être identique à VERSION dans Code.gs */
+const APP_VERSION=5; /* doit être identique à VERSION dans Code.gs */
 function gurl(params){return DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+params+'&key='+encodeURIComponent(DB.cfg.key)+'&_='+Date.now()}
 let syncing=false;
 async function syncPush(){
@@ -272,7 +278,7 @@ async function runDiag(){
           const j2=await r2.json();
           add(j2.ok?'ok':'bad',j2.ok?'L’envoi de données vers le Sheet fonctionne.':'Le script refuse l’envoi de données.');
         }catch(e){add('bad','L’envoi de données vers le Sheet échoue.')}
-        add('info','Dans le Sheet : '+ping.pointages+' pointage(s), '+ping.taches+' tâche(s), '+ping.equipe+' employée(s) dans l’onglet Equipe.');
+        add('info','Dans le Sheet : '+ping.pointages+' pointage(s), '+ping.taches+' tâche(s), '+ping.equipe+' employée(s) dans l’onglet Equipe'+(ping.liste===undefined?'':', '+ping.liste+' tâche(s) dans l’onglet Liste menage')+'.');
         add('info','Sur cet appareil : '+DB.queue.length+' enregistrement(s) en attente d’envoi.');
         await syncStaff();
       }
@@ -290,7 +296,9 @@ async function syncStaff(){
     const j=await r.json();
     if(!j.ok){LAST_ERR=j.err==='cle'?'cle':'reseau';return false}
     if(!Array.isArray(j.staff)){LAST_ERR='script';return false}
-    DB.staff=j.staff;DB.dirPin=j.dirPin||null;DB.staffLoaded=true;LAST_IGN=j.ignores||[];save();applyStaff();return true;
+    DB.staff=j.staff;DB.dirPin=j.dirPin||null;DB.staffLoaded=true;LAST_IGN=j.ignores||[];
+    if(Array.isArray(j.tasks)){DB.tasks=j.tasks;DB.tasksLoaded=true}
+    save();applyStaff();return true;
   }catch(e){LAST_ERR='reseau';return false}
 }
 const ERR_TXT={cle:'La clé secrète ne correspond pas à celle de Code.gs',script:'Le script du Sheet n’est pas à jour : refaites Déployer, Gérer les déploiements, crayon, Nouvelle version, Déployer',reseau:'Adresse du script incorrecte ou pas de connexion'};
@@ -385,7 +393,7 @@ function vTasks(){
   /* Une tâche hebdomadaire cochée un jour précédent disparaît jusqu'à son échéance (7 jours après). */
   const masked=t=>{const x=t.f==='s'?doneOf(map,k,t,today):null;return !!x&&x.date!==today};
   const nMasked=tasksFor(k).filter(masked).length;
-  MOMENTS.forEach(m=>{
+  momentsOf().forEach(m=>{
     const l=tasksFor(k).filter(t=>t.m===m&&!masked(t));if(!l.length)return;
     h+='<div class="moment">'+m+'</div>';
     l.forEach(t=>{
@@ -588,7 +596,7 @@ function genDemo(){
       tasksFor(k).forEach(t=>{
         if(t.f==='s'&&wd!==4)return;
         if(Math.random()>(t.f==='s'?0.85:0.9))return;
-        const r=rng[t.m],ts=at(d,rnd(r[0],r[1]));if(ts>now)return;
+        const r=rng[t.m]||[540,900],ts=at(d,rnd(r[0],r[1]));if(ts>now)return;
         addTick(k,t,crew[rnd(0,crew.length-1)].id,true,ds,ts,true);
       });
     });
@@ -600,8 +608,8 @@ function act(a,d){
     case 'setsec':DB.cfg.section=d.k;save();go('home');break;
     case 'home':go('home');break;
     case 'punch':go('punch');Promise.all([syncStaff(),syncPull(8)]).then(r=>{if((r[0]||r[1])&&S.view==='punch')render()});break;
-    case 'staffreload':syncStaff().then(ok=>{toast(ok?('Équipe chargée : '+STAFF.length+' employée(s)'+(LAST_IGN.length?'. Ignorée(s), code invalide : '+LAST_IGN.join(', '):'')):('Chargement impossible. '+(ERR_TXT[LAST_ERR]||'')));render()});break;
-    case 'tasks':go('tasks');break;
+    case 'staffreload':syncStaff().then(ok=>{toast(ok?('Équipe chargée : '+STAFF.length+' employée(s), '+TASKS.length+' tâche(s) de ménage'+(LAST_IGN.length?'. Ignorée(s), code invalide : '+LAST_IGN.join(', '):'')):('Chargement impossible. '+(ERR_TXT[LAST_ERR]||'')));render()});break;
+    case 'tasks':go('tasks');syncStaff().then(ok=>{if(ok&&S.view==='tasks'&&!S.askUntick)render()});break;
     case 'who':S.pinTarget=d.s;S.pin='';S.err='';go('pin');break;
     case 'dirlogin':S.pinTarget='dir';S.pin='';S.err='';go('pin');break;
     case 'pinback':S.pin='';S.err='';go(S.pinTarget==='dir'?(DB.cfg.section?'home':'setup'):'punch');break;
@@ -653,7 +661,7 @@ function act(a,d){
     case 'wipe':case 'resetall':{
       if(S.ask===a){
         S.ask=null;
-        if(a==='wipe'){const c=DB.cfg,st=DB.staff,dp=DB.dirPin,sl=DB.staffLoaded;DB=init();DB.cfg=c;DB.staff=st;DB.dirPin=dp;DB.staffLoaded=sl;save();applyStaff();toast('Enregistrements de cette tablette effacés');render()}
+        if(a==='wipe'){const c=DB.cfg,st=DB.staff,dp=DB.dirPin,sl=DB.staffLoaded,tk=DB.tasks,tl=DB.tasksLoaded;DB=init();DB.cfg=c;DB.staff=st;DB.dirPin=dp;DB.staffLoaded=sl;DB.tasks=tk;DB.tasksLoaded=tl;save();applyStaff();toast('Enregistrements de cette tablette effacés');render()}
         else{DB=init();save();applyStaff();S.diag=null;toast('Tablette réinitialisée');go('setup')}
       }else{
         S.ask=a;render();
