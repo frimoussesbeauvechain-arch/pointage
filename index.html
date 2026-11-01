@@ -82,6 +82,9 @@ td.n,th.n{text-align:center}
 label{display:block;margin:10px 0 4px;color:var(--mut);font-size:15px}
 input[type=text],input[type=url]{width:100%}
 .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:14px 22px;border-radius:14px;z-index:9}
+.diag{list-style:none;padding:0;margin:12px 0}
+.diag li{padding:8px 12px;border-radius:10px;margin-bottom:6px;background:#f1efe8}
+.diag li.ok{background:#e3f1e6}.diag li.bad{background:#f6dcd8}.diag li.wait{background:#fbebd0}
 .undone{columns:2;font-size:16px;margin:6px 0 0;padding-left:20px}
 </style>
 </head>
@@ -217,6 +220,8 @@ function dayStats(date,staff){
 }
 
 /* ===== Synchronisation avec le Google Sheet ===== */
+const APP_VERSION=4; /* doit être identique à VERSION dans Code.gs */
+function gurl(params){return DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+params+'&key='+encodeURIComponent(DB.cfg.key)+'&_='+Date.now()}
 let syncing=false;
 async function syncPush(){
   if(!DB.cfg.url||!DB.queue.length||syncing)return;
@@ -228,23 +233,60 @@ async function syncPush(){
   }catch(e){}
   syncing=false;if(S.view==='home')render();
 }
-async function syncPull(){
+/* Récupère les enregistrements des autres appareils (jours = nombre de jours en arrière). */
+async function syncPull(days){
   if(!DB.cfg.url)return false;
   try{
-    const r=await fetch(DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+'action=all&key='+encodeURIComponent(DB.cfg.key));
+    const since=ymd(addDays(new Date(),-(days||8)));
+    const r=await fetch(gurl('action=all&since='+since));
     const j=await r.json();if(!j.ok)return false;
     const hp=new Set(DB.punches.map(p=>p.id)),ht=new Set(DB.ticks.map(t=>t.id));
-    (j.punches||[]).forEach(p=>{if(!hp.has(p.id))DB.punches.push(p)});
-    (j.ticks||[]).forEach(t=>{if(!ht.has(t.id))DB.ticks.push(t)});
+    (j.punches||[]).forEach(p=>{if(!hp.has(p.id)){hp.add(p.id);DB.punches.push(p)}});
+    (j.ticks||[]).forEach(t=>{if(!ht.has(t.id)){ht.add(t.id);DB.ticks.push(t)}});
     save();return true;
   }catch(e){return false}
+}
+const urlOk=u=>/^https:\/\/script\.google\.com\/macros\/s\/[^\/?#]+\/exec$/.test(u);
+/* Test de la liaison : dit précisément ce qui ne va pas */
+async function runDiag(){
+  const out=[],add=(lvl,t)=>out.push({lvl:lvl,t:t});
+  S.diag=[{lvl:'wait',t:'Test en cours…'}];render();
+  const u=DB.cfg.url,k=DB.cfg.key;
+  if(!u)add('bad','Aucune adresse de script n’est enregistrée sur cet appareil.');
+  else if(!urlOk(u))add('bad','L’adresse doit ressembler à https://script.google.com/macros/s/…/exec. Elle ne doit pas se terminer par /dev. Recopiez l’adresse « Application Web » du déploiement.');
+  else if(!k)add('bad','La clé secrète n’est pas saisie.');
+  else{
+    add('ok','L’adresse a le bon format.');
+    let ping=null;
+    try{const r=await fetch(gurl('action=ping'));ping=await r.json()}
+    catch(e){add('bad','Le script ne répond pas. Vérifiez le Wi-Fi puis, dans Apps Script, que « Qui a accès » est réglé sur « Tout le monde » (Déployer, Gérer les déploiements, crayon).')}
+    if(ping){
+      if(ping.ok===false&&ping.err==='cle')add('bad','Le script répond, mais la clé secrète est différente de celle de Code.gs (la ligne « const CLE »).');
+      else if(ping.ok!==true||ping.version===undefined)add('bad','Le script répond, mais il est trop ancien. Collez le dernier Code.gs, puis Déployer, Gérer les déploiements, crayon, Nouvelle version, Déployer.');
+      else{
+        add('ok','Le script répond et la clé est correcte.');
+        if(ping.version!==APP_VERSION)add('bad','Versions différentes : application v'+APP_VERSION+', script v'+ping.version+'. Mettez à jour la plus ancienne des deux.');
+        else add('ok','Application et script sont tous deux en version '+APP_VERSION+'.');
+        try{
+          const r2=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:k,items:[]})});
+          const j2=await r2.json();
+          add(j2.ok?'ok':'bad',j2.ok?'L’envoi de données vers le Sheet fonctionne.':'Le script refuse l’envoi de données.');
+        }catch(e){add('bad','L’envoi de données vers le Sheet échoue.')}
+        add('info','Dans le Sheet : '+ping.pointages+' pointage(s), '+ping.taches+' tâche(s), '+ping.equipe+' employée(s) dans l’onglet Equipe.');
+        add('info','Sur cet appareil : '+DB.queue.length+' enregistrement(s) en attente d’envoi.');
+        await syncStaff();
+      }
+    }
+  }
+  if(!out.some(x=>x.lvl==='bad'))out.push({lvl:'ok',t:'Tout est en ordre.'});
+  S.diag=out;render();
 }
 let LAST_IGN=[],LAST_ERR='';
 async function syncStaff(){
   if(!DB.cfg.url)return false;
   LAST_ERR='';
   try{
-    const r=await fetch(DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+'action=staff&key='+encodeURIComponent(DB.cfg.key));
+    const r=await fetch(gurl('action=staff'));
     const j=await r.json();
     if(!j.ok){LAST_ERR=j.err==='cle'?'cle':'reseau';return false}
     if(!Array.isArray(j.staff)){LAST_ERR='script';return false}
@@ -253,6 +295,8 @@ async function syncStaff(){
 }
 const ERR_TXT={cle:'La clé secrète ne correspond pas à celle de Code.gs',script:'Le script du Sheet n’est pas à jour : refaites Déployer, Gérer les déploiements, crayon, Nouvelle version, Déployer',reseau:'Adresse du script incorrecte ou pas de connexion'};
 setInterval(()=>{syncStaff().then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()})},600000);
+/* Toutes les 2 minutes : récupérer les pointages des autres tablettes (présences à jour dans chaque section) */
+setInterval(()=>{if(S.view==='home'||S.view==='punch')syncPull(8).then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()})},120000);
 setInterval(syncPush,60000);
 window.addEventListener('online',syncPush);
 
@@ -260,6 +304,7 @@ window.addEventListener('online',syncPush);
 (function(){
   try{
     const q=new URLSearchParams(location.search);let ch=false;
+    if(q.get('reset')==='1'){DB=init();ch=true} /* ?reset=1 : efface tout sur cet appareil */
     if(q.get('section')&&SECTIONS[q.get('section')]){DB.cfg.section=q.get('section');ch=true}
     if(q.get('url')){DB.cfg.url=q.get('url');ch=true}
     if(q.get('key')){DB.cfg.key=q.get('key');ch=true}
@@ -287,7 +332,7 @@ function foot(){
   let t;
   if(!DB.cfg.url)t='Mode local : aucun Google Sheet relié';
   else t=DB.queue.length?DB.queue.length+' enregistrement(s) en attente d’envoi':'Synchronisé avec le Sheet';
-  return '<footer>'+t+'</footer>';
+  return '<footer>'+t+' · version '+APP_VERSION+'</footer>';
 }
 function vSetup(){
   return head('Crèche')+'<div class="center"><h2>Quelle section pour cette tablette ?</h2><div class="row">'+
@@ -359,7 +404,7 @@ function vDir(){
   let h=head('Direction',null,'dirquit')+'<main><div class="tabs">'+
     [['jour','Jour'],['semaine','Semaine'],['reglages','Réglages et export']].map(t=>'<button class="'+(S.dirTab===t[0]?'on':'')+'" data-a="dtab" data-t="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>';
   if(S.dirTab!=='reglages'){
-    h+='<div class="bar2"><button data-a="dd" data-n="-1">‹</button><b>'+title+'</b><button data-a="dd" data-n="1">›</button><button data-a="dnow">Aujourd’hui</button>'+
+    h+='<div class="bar2"><button data-a="dd" data-n="-1">‹</button><b>'+title+'</b><button data-a="dd" data-n="1">›</button><button data-a="dnow">Aujourd’hui</button><button data-a="dpull">Actualiser</button>'+
       '<select data-c="dsec">'+opts([['*','Toutes les sections']].concat(Object.keys(SECTIONS).map(k=>[k,SECTIONS[k].nom])),S.dirSec)+'</select>'+
       '<select data-c="dstaff">'+opts([['*','Toutes les employées']].concat(STAFF.map(s=>[s.id,s.nom])),S.dirStaff)+'</select></div>';
     h+=wk?bSemaine():bJour();
@@ -448,7 +493,8 @@ function bSemaine(){
 function lienTablette(k){return location.origin+location.pathname+'?section='+k+'&url='+encodeURIComponent(DB.cfg.url)+'&key='+encodeURIComponent(DB.cfg.key)}
 function cardLiens(){
   const t='<div class="card"><h2>Liens de configuration des tablettes</h2>';
-  if(!DB.cfg.url)return t+'<p class="mut">Renseignez d’abord l’adresse du Sheet et la clé dans la carte ci-dessus.</p></div>';
+  if(!DB.cfg.url||!DB.cfg.key)return t+'<p class="mut">Renseignez d’abord l’adresse du script <b>et</b> la clé secrète dans la carte ci-dessus.</p></div>';
+  if(!urlOk(DB.cfg.url))return t+'<p class="mut">L’adresse du script n’a pas le bon format (elle doit se terminer par /exec). Cliquez sur « Tester la liaison ».</p></div>';
   if(location.protocol==='file:')return t+'<p class="mut">Disponible quand l’application est en ligne (adresse qui commence par https).</p></div>';
   return t+'<p class="mut">Ouvrez le lien de chaque section sur la tablette correspondante : elle se règle toute seule.</p>'+
     Object.keys(SECTIONS).map(k=>'<label>'+SECTIONS[k].nom+'</label><div class="btns"><input type="text" id="lien_'+k+'" readonly value="'+esc(lienTablette(k))+'" style="flex:1"><button data-a="copylink" data-k="'+k+'">Copier</button></div>').join('')+'</div>';
@@ -458,11 +504,14 @@ function bReglages(){
     opts(Object.keys(SECTIONS).map(k=>[k,SECTIONS[k].nom]),DB.cfg.section)+'</select></div>'+
   '<div class="card"><h2>Liaison avec le Google Sheet</h2><label>Adresse de l’application web (Apps Script)</label><input type="url" data-c="cfgurl" value="'+esc(DB.cfg.url)+'" placeholder="https://script.google.com/macros/s/…/exec">'+
     '<label>Clé secrète (la même que dans le script)</label><input type="text" data-c="cfgkey" value="'+esc(DB.cfg.key)+'">'+
-    '<div class="btns"><button data-a="syncnow">Synchroniser maintenant</button><button data-a="pull">Charger les données du Sheet</button><button data-a="staffreload">Recharger l’équipe</button></div>'+
-    '<p class="mut">En attente d’envoi : '+DB.queue.length+(DB.cfg.url?' · Équipe chargée : '+STAFF.length+' employée(s)':'')+'</p></div>'+
+    '<div class="btns"><button data-a="diag">Tester la liaison</button><button data-a="syncnow">Envoyer maintenant</button><button data-a="pull">Actualiser depuis le Sheet</button><button data-a="staffreload">Recharger l’équipe</button></div>'+
+    (S.diag?'<ul class="diag">'+S.diag.map(x=>'<li class="'+x.lvl+'">'+(x.lvl==='ok'?'✓ ':x.lvl==='bad'?'✗ ':x.lvl==='wait'?'… ':'')+esc(x.t)+'</li>').join('')+'</ul>':'')+
+    '<p class="mut">En attente d’envoi : '+DB.queue.length+(DB.cfg.url?' · Équipe chargée : '+STAFF.length+' employée(s)':'')+' · Version de l’application : '+APP_VERSION+'</p></div>'+
   cardLiens()+'<div class="card"><h2>Export CSV (Excel)</h2><div class="btns"><button data-a="exp" data-t="punch">Pointages</button><button data-a="exp" data-t="tasks">Tâches faites</button><button data-a="exp" data-t="hours">Heures de la semaine affichée</button></div></div>'+
-  '<div class="card"><h2>Prototype</h2><div class="btns"><button data-a="demo">Générer des données de démonstration</button><button data-a="wipe">Effacer toutes les données de cette tablette</button></div>'+
-    '<p class="mut">Codes de démonstration : employées 1111 à 5555 (dans l’ordre de la liste), direction 0000.</p></div>';
+  '<div class="card"><h2>Données de cette tablette</h2><div class="btns">'+(DB.cfg.url?'':'<button data-a="demo">Générer des données de démonstration</button>')+
+    '<button data-a="wipe">'+(S.ask==='wipe'?'Appuyer encore pour effacer':'Effacer les pointages et tâches de cette tablette')+'</button>'+
+    '<button data-a="resetall">'+(S.ask==='resetall'?'Appuyer encore pour tout réinitialiser':'Réinitialiser complètement cette tablette')+'</button></div>'+
+    '<p class="mut">« Effacer » garde les réglages et vide les enregistrements de cette tablette ; ils sont ensuite rechargés depuis le Sheet. Ce qui est dans le Sheet n’est jamais effacé d’ici.'+(DB.cfg.url?'':' Codes de démonstration : employées 1111 à 5555, direction 0000.')+'</p></div>';
 }
 
 function render(){
@@ -476,7 +525,7 @@ function render(){
 function check(){
   if(S.pinTarget==='dir'){
     if(!DIRECTION_PIN){S.pin='';S.err='Code direction invalide : vérifiez la cellule B1 de l’onglet Reglages du Sheet';render();return}
-    if(S.pin===DIRECTION_PIN){S.pin='';S.err='';S.dirDate=ymd(new Date());go('dir');return}
+    if(S.pin===DIRECTION_PIN){S.pin='';S.err='';S.dirDate=ymd(new Date());go('dir');syncPull(90).then(ok=>{if(ok&&S.view==='dir')render()});return}
   }else{
     const s=staffById(S.pinTarget);
     if(s&&s.pin===S.pin){S.pin='';S.err='';doPunch(s.id);return}
@@ -550,7 +599,7 @@ function act(a,d){
   switch(a){
     case 'setsec':DB.cfg.section=d.k;save();go('home');break;
     case 'home':go('home');break;
-    case 'punch':go('punch');syncStaff().then(ok=>{if(ok&&S.view==='punch')render()});break;
+    case 'punch':go('punch');Promise.all([syncStaff(),syncPull(8)]).then(r=>{if((r[0]||r[1])&&S.view==='punch')render()});break;
     case 'staffreload':syncStaff().then(ok=>{toast(ok?('Équipe chargée : '+STAFF.length+' employée(s)'+(LAST_IGN.length?'. Ignorée(s), code invalide : '+LAST_IGN.join(', '):'')):('Chargement impossible. '+(ERR_TXT[LAST_ERR]||'')));render()});break;
     case 'tasks':go('tasks');break;
     case 'who':S.pinTarget=d.s;S.pin='';S.err='';go('pin');break;
@@ -591,7 +640,8 @@ function act(a,d){
       toast('Départ corrigé');render();break;
     }
     case 'syncnow':syncPush().then(()=>{toast(DB.queue.length?'Envoi impossible pour le moment':'Synchronisé');render()});break;
-    case 'pull':syncPull().then(ok=>{toast(ok?'Données chargées':'Chargement impossible');render()});break;
+    case 'pull':case 'dpull':syncPull(90).then(ok=>{toast(ok?'Données à jour':'Actualisation impossible : voir « Tester la liaison » dans Réglages');render()});break;
+    case 'diag':runDiag();break;
     case 'copylink':{
       const el=document.getElementById('lien_'+d.k);el.focus();el.select();
       let ok=false;try{ok=document.execCommand('copy')}catch(e){}
@@ -600,7 +650,17 @@ function act(a,d){
     }
     case 'exp':exportCsv(d.t);break;
     case 'demo':genDemo();toast('Données de démonstration ajoutées');render();break;
-    case 'wipe':if(confirm('Effacer toutes les données de cette tablette ?')){const c=DB.cfg;DB=init();DB.cfg=c;save();render()}break;
+    case 'wipe':case 'resetall':{
+      if(S.ask===a){
+        S.ask=null;
+        if(a==='wipe'){const c=DB.cfg,st=DB.staff,dp=DB.dirPin,sl=DB.staffLoaded;DB=init();DB.cfg=c;DB.staff=st;DB.dirPin=dp;DB.staffLoaded=sl;save();applyStaff();toast('Enregistrements de cette tablette effacés');render()}
+        else{DB=init();save();applyStaff();S.diag=null;toast('Tablette réinitialisée');go('setup')}
+      }else{
+        S.ask=a;render();
+        setTimeout(()=>{if(S.ask===a){S.ask=null;if(S.view==='dir')render()}},5000);
+      }
+      break;
+    }
   }
 }
 app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b)act(b.dataset.a,b.dataset)});
@@ -619,6 +679,7 @@ setInterval(()=>{if(S.view==='home')render()},30000);
 render();
 syncPush();
 syncStaff().then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()});
+syncPull(8).then(ok=>{if(ok&&(S.view==='home'||S.view==='punch'))render()});
 })();
 </script>
 </body>
