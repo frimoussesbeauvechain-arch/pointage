@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#2f7f79">
+<title>Crèche : pointage et tâches</title>
+<style>
+:root{--bg:#f4f1ea;--ink:#23323a;--mut:#667880;--acc:#2f7f79;--ok:#3a8f4f;--warn:#d98a1f;--bad:#c0463c;--line:#ddd6c8;--P:#d9724e;--M:#3f8fab;--G:#7462a8}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:18px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;border-radius:16px;background:#fff;padding:14px 18px;box-shadow:0 0 0 1px var(--line)}
+button:active{transform:scale(.98)}
+button.link{background:none;box-shadow:none;color:var(--acc);text-decoration:underline;padding:10px}
+select,input{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}
+header{display:flex;align-items:center;gap:16px;padding:14px 22px;background:var(--c,var(--acc));color:#fff}
+header h1{margin:0;font-size:26px}
+header .date{opacity:.9;font-size:16px;text-transform:capitalize}
+header .grow{flex:1}
+header .clock{font-size:34px;font-weight:600;font-variant-numeric:tabular-nums}
+header button{background:rgba(255,255,255,.2);color:#fff;box-shadow:none;padding:10px 16px}
+main{padding:20px 22px;max-width:1100px;margin:0 auto}
+footer{padding:14px 22px;text-align:center;color:var(--mut);font-size:15px}
+h2{margin:0 0 12px;font-size:20px}
+.card{background:#fff;border-radius:18px;padding:18px 20px;box-shadow:0 0 0 1px var(--line);margin-bottom:16px}
+.mut{color:var(--mut)}
+.center{max-width:760px;margin:60px auto;text-align:center;padding:0 20px}
+.row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin:24px 0}
+.big{flex:1;min-width:200px;padding:28px 20px;font-size:26px;font-weight:600;border-radius:22px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.big small{font-size:16px;font-weight:400;opacity:.85}
+.sec{background:var(--c);color:#fff}
+.home{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.home{grid-template-columns:1fr}}
+.actions{display:flex;flex-direction:column;gap:16px}
+.act1{background:var(--acc);color:#fff;flex:1}
+.act2{background:#fff;flex:1}
+.gauge{display:flex;gap:16px;align-items:center;padding:14px;border-radius:14px;margin-bottom:12px}
+.gauge b{font-size:54px;line-height:1}
+.gauge.ok{background:#e3f1e6}.gauge.low{background:#fbebd0}
+.chip{display:inline-block;background:#eef4f3;border-radius:999px;padding:8px 14px;margin:4px 6px 4px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.staff{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:20px;font-size:22px;font-weight:600}
+.staff small{font-weight:400;font-size:15px;color:var(--mut)}
+.staff.here{background:#e3f1e6}
+.staff.else{background:#fbebd0}
+.pinpad{max-width:380px;text-align:center}
+.dots{display:flex;gap:14px;justify-content:center;margin:14px 0 4px}
+.dots i{width:20px;height:20px;border-radius:50%;border:2px solid var(--acc)}
+.dots i.on{background:var(--acc)}
+.err{color:var(--bad);min-height:26px;margin:6px 0}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.keys button{font-size:28px;padding:18px 0}
+.keys .sm{font-size:16px}
+.donebox{text-align:center;margin-top:50px}
+.donebox .tick{font-size:90px;color:var(--ok);line-height:1}
+.donebox h2{font-size:30px;margin:10px 0}
+.who{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 16px}
+.who button.on{background:var(--acc);color:#fff}
+.bar{height:16px;background:#e8e2d4;border-radius:99px;overflow:hidden;margin:6px 0 14px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.moment{margin:18px 0 8px;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.task{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 18px;margin-bottom:10px;font-size:20px}
+.task .box{flex:none;width:34px;height:34px;border-radius:10px;border:2px solid var(--line);display:grid;place-items:center;font-size:24px;color:#fff}
+.task.d{background:#e3f1e6}
+.task.d .box{background:var(--ok);border-color:var(--ok)}
+.task .by{margin-left:auto;font-size:14px;color:var(--mut);white-space:nowrap}
+.task.ask{background:#fbebd0}
+.task.ask .box{background:var(--warn);border-color:var(--warn)}
+.task.ask .by{color:#8a5200}
+.banner{background:#fbebd0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tabs button.on{background:var(--ink);color:#fff}
+.bar2{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mut);font-weight:500;font-size:14px}
+td.n,th.n{text-align:center}
+.flag{background:#fbebd0;color:#8a5200;border-radius:8px;padding:2px 8px;font-size:14px}
+.c-ok{background:#e3f1e6}.c-warn{background:#fbebd0}.c-bad{background:#f6dcd8}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+label{display:block;margin:10px 0 4px;color:var(--mut);font-size:15px}
+input[type=text],input[type=url]{width:100%}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:14px 22px;border-radius:14px;z-index:9}
+.undone{columns:2;font-size:16px;margin:6px 0 0;padding-left:20px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript>Cette application demande JavaScript.</noscript>
+<script>
+(function(){
+'use strict';
+
+/* ===== Configuration du prototype ===== */
+const SECTIONS={
+  P:{nom:'Petits',enfants:6,min:1,col:'var(--P)'},
+  M:{nom:'Moyens',enfants:12,min:2,col:'var(--M)'},
+  G:{nom:'Grands',enfants:12,min:2,col:'var(--G)'}
+};
+/* Équipe fictive. En production, cette liste et les codes viennent de la feuille « Equipe ». */
+const STAFF=[
+  {id:'s1',nom:'Alice',pin:'1111'},
+  {id:'s2',nom:'Bénédicte',pin:'2222'},
+  {id:'s3',nom:'Chloé',pin:'3333'},
+  {id:'s4',nom:'Dorothée',pin:'4444'},
+  {id:'s5',nom:'Emma',pin:'5555'}
+];
+const DIRECTION_PIN='0000';
+const MOMENTS=['Ouverture','Matinée','Midi','Après-midi','Fermeture','Chaque semaine'];
+/* f : j = chaque jour, s = chaque semaine. sec : sections concernées (P, M, G). */
+const T=(id,m,l,f,sec)=>({id,m,l,f:f||'j',sec:sec||'PMG'});
+const TASKS=[
+  T('o1','Ouverture','Aérer la pièce pendant 10 minutes'),
+  T('o2','Ouverture','Vérifier savon, papier, gants et lingettes'),
+  T('m1','Matinée','Désinfecter le plan de change et le matelas (fin de matinée)'),
+  T('m2','Matinée','Stériliser biberons et tétines','j','P'),
+  T('m3','Matinée','Désinfecter toilettes et pots (matin)','j','MG'),
+  T('d1','Midi','Nettoyer et désinfecter tables, chaises et chaises hautes après le repas'),
+  T('d2','Midi','Balayer et laver le sol de la zone repas'),
+  T('a1','Après-midi','Laver les jouets utilisés dans la journée'),
+  T('a2','Après-midi','Nettoyer tapis de jeu et coin lecture'),
+  T('a3','Après-midi','Remplacer draps et turbulettes souillés'),
+  T('f1','Fermeture','Désinfecter le plan de change (soir)'),
+  T('f2','Fermeture','Balayer et laver le sol de la section'),
+  T('f3','Fermeture','Vider les poubelles (couches et déchets)'),
+  T('f4','Fermeture','Désinfecter lavabos et toilettes des enfants (soir)'),
+  T('f5','Fermeture','Fermer les fenêtres et vérifier la section'),
+  T('w1','Chaque semaine','Laver les jouets en profondeur (bac ou lave-vaisselle)','s'),
+  T('w2','Chaque semaine','Désinfecter lits, parcs et matelas','s'),
+  T('w3','Chaque semaine','Laver draps et turbulettes de la section','s'),
+  T('w4','Chaque semaine','Nettoyer étagères, armoires et casiers','s'),
+  T('w5','Chaque semaine','Nettoyer le frigo de la section (lait, biberons)','s','P'),
+  T('w6','Chaque semaine','Dépoussiérer rebords, plinthes et vitres basses','s')
+];
+const tasksFor=k=>TASKS.filter(t=>t.sec.includes(k));
+
+/* ===== Outils ===== */
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>{const a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])};
+const hm=ts=>{const d=new Date(ts);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const dur=ms=>{const m=Math.round(ms/60000);return Math.floor(m/60)+'h'+pad(m%60)};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const JOURS=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+const fmtDate=s=>{const d=parse(s);return JOURS[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)};
+const staffById=id=>STAFF.find(s=>s.id===id);
+const nomStaff=id=>(staffById(id)||{nom:id}).nom;
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const mondayOf=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const w=x.getDay()||7;x.setDate(x.getDate()-w+1);return x};
+function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=t.getUTCFullYear();const w=Math.ceil(((t-Date.UTC(y,0,1))/864e5+1)/7);return y+'-W'+pad(w)}
+const scopeOf=(t,dateStr)=>t.f==='s'?isoWeek(parse(dateStr)):dateStr;
+
+/* ===== Données locales ===== */
+const LS='creche_pointage_v1';
+function init(){return{punches:[],ticks:[],queue:[],cfg:{section:null,url:'',key:''}}}
+function load(){try{const x=JSON.parse(localStorage.getItem(LS));return x&&x.punches?x:init()}catch(e){return init()}}
+let DB=load();
+function save(){try{localStorage.setItem(LS,JSON.stringify(DB))}catch(e){}}
+function enqueue(k,d){if(DB.cfg.url){DB.queue.push({k:k,d:d})}}
+
+function addPunch(staff,section,type,extra,noq){
+  const ts=(extra&&extra.ts)||Date.now();
+  const r=Object.assign({id:uid(),ts:ts,date:ymd(new Date(ts)),h:hm(ts),staff:staff,nom:nomStaff(staff),section:section,type:type},extra||{});
+  DB.punches.push(r);if(!noq)enqueue('p',r);save();if(!noq)syncPush();return r;
+}
+function addTick(section,task,staff,done,dateStr,ts,noq){
+  ts=ts||Date.now();
+  const r={id:uid(),ts:ts,date:dateStr,h:hm(ts),week:isoWeek(parse(dateStr)),scope:scopeOf(task,dateStr),section:section,task:task.id,label:task.l,staff:staff,nom:nomStaff(staff),done:done};
+  DB.ticks.push(r);if(!noq)enqueue('t',r);save();if(!noq)syncPush();return r;
+}
+function validPunches(){
+  const v=new Set(DB.punches.filter(p=>p.type==='void').map(p=>p.ref));
+  return DB.punches.filter(p=>p.type!=='void'&&!v.has(p.id)).sort((a,b)=>a.ts-b.ts);
+}
+function tickMap(){const m={};DB.ticks.slice().sort((a,b)=>a.ts-b.ts).forEach(t=>{m[t.scope+'|'+t.section+'|'+t.task]=t});return m}
+const diffDays=(a,b)=>Math.round((parse(a)-parse(b))/864e5);
+/* Tâche hebdomadaire : considérée faite pendant 7 jours à partir du jour où elle a été cochée (le jour J et les 6 suivants). */
+function weeklyState(k,t,date){
+  const l=DB.ticks.filter(x=>x.section===k&&x.task===t.id&&x.date<=date).sort((a,b)=>a.ts-b.ts);
+  const x=l[l.length-1];
+  return x&&x.done&&diffDays(date,x.date)<=6?x:null;
+}
+const doneOf=(map,k,t,date)=>{
+  if(t.f==='s')return weeklyState(k,t,date);
+  const x=map[date+'|'+k+'|'+t.id];return x&&x.done?x:null;
+};
+function prog(k,date,map){
+  const dl=tasksFor(k).filter(t=>t.f==='j'),wl=tasksFor(k).filter(t=>t.f==='s');
+  return{d:dl.filter(t=>doneOf(map,k,t,date)).length,dt:dl.length,w:wl.filter(t=>doneOf(map,k,t,date)).length,wt:wl.length};
+}
+function presenceMap(date){const m={};validPunches().filter(p=>p.date===date).forEach(p=>{m[p.staff]=p});return m}
+function presentIn(k){return Object.values(presenceMap(ymd(new Date()))).filter(p=>p.type==='in'&&p.section===k)}
+function dayStats(date,staff){
+  const ps=validPunches().filter(p=>p.date===date&&p.staff===staff);
+  let ms=0,openAt=null,first=null,last=null;
+  ps.forEach(p=>{
+    if(p.type==='in'){if(openAt===null)openAt=p.ts;if(first===null)first=p.ts}
+    else if(p.type==='out'){if(openAt!==null){ms+=p.ts-openAt;openAt=null}last=p.ts}
+  });
+  const today=ymd(new Date());
+  return{ms:ms,first:first,last:last,openAt:openAt,open:openAt!==null,
+    missing:openAt!==null&&date<today,ongoing:openAt!==null&&date===today,
+    secs:Array.from(new Set(ps.map(p=>p.section)))};
+}
+
+/* ===== Synchronisation avec le Google Sheet ===== */
+let syncing=false;
+async function syncPush(){
+  if(!DB.cfg.url||!DB.queue.length||syncing)return;
+  syncing=true;const items=DB.queue.slice();
+  try{
+    const r=await fetch(DB.cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:DB.cfg.key,items:items})});
+    const j=await r.json();
+    if(j.ok){DB.queue=DB.queue.filter(q=>items.indexOf(q)<0);save()}
+  }catch(e){}
+  syncing=false;if(S.view==='home')render();
+}
+async function syncPull(){
+  if(!DB.cfg.url)return false;
+  try{
+    const r=await fetch(DB.cfg.url+(DB.cfg.url.indexOf('?')<0?'?':'&')+'action=all&key='+encodeURIComponent(DB.cfg.key));
+    const j=await r.json();if(!j.ok)return false;
+    const hp=new Set(DB.punches.map(p=>p.id)),ht=new Set(DB.ticks.map(t=>t.id));
+    (j.punches||[]).forEach(p=>{if(!hp.has(p.id))DB.punches.push(p)});
+    (j.ticks||[]).forEach(t=>{if(!ht.has(t.id))DB.ticks.push(t)});
+    save();return true;
+  }catch(e){return false}
+}
+setInterval(syncPush,60000);
+window.addEventListener('online',syncPush);
+
+/* Lien de configuration : ?section=P&url=...&key=... règle la tablette puis disparaît de la barre d'adresse */
+(function(){
+  try{
+    const q=new URLSearchParams(location.search);let ch=false;
+    if(q.get('section')&&SECTIONS[q.get('section')]){DB.cfg.section=q.get('section');ch=true}
+    if(q.get('url')){DB.cfg.url=q.get('url');ch=true}
+    if(q.get('key')){DB.cfg.key=q.get('key');ch=true}
+    if(ch){save();history.replaceState(null,'',location.pathname)}
+  }catch(e){}
+})();
+
+/* ===== État de l'interface ===== */
+let S={view:DB.cfg.section?'home':'setup',pinTarget:null,pin:'',err:'',who:null,done:null,
+  dirTab:'jour',dirDate:ymd(new Date()),dirSec:'*',dirStaff:'*'};
+let doneTimer=null,untickTimer=null;
+const app=document.getElementById('app');
+function go(v){S.view=v;S.askUntick=null;render();window.scrollTo(0,0)}
+function toast(m){const e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
+
+/* ===== Vues ===== */
+function head(title,col,back){
+  const now=new Date();
+  return '<header style="--c:'+(col||'var(--acc)')+'">'+(back?'<button data-a="'+back+'">‹ Retour</button>':'')+
+    '<div class="grow"><h1>'+esc(title)+'</h1><span class="date">'+now.toLocaleDateString('fr-BE',{weekday:'long',day:'numeric',month:'long'})+'</span></div>'+
+    '<div class="clock">'+hm(now.getTime())+'</div>'+
+    (S.view==='home'||S.view==='setup'?'<button data-a="dirlogin" aria-label="Direction">Direction</button>':'')+'</header>';
+}
+function foot(){
+  let t;
+  if(!DB.cfg.url)t='Mode local : aucun Google Sheet relié';
+  else t=DB.queue.length?DB.queue.length+' enregistrement(s) en attente d’envoi':'Synchronisé avec le Sheet';
+  return '<footer>'+t+'</footer>';
+}
+function vSetup(){
+  return head('Crèche')+'<div class="center"><h2>Quelle section pour cette tablette ?</h2><div class="row">'+
+    Object.keys(SECTIONS).map(k=>'<button class="big sec" style="--c:'+SECTIONS[k].col+'" data-a="setsec" data-k="'+k+'">'+SECTIONS[k].nom+'<small>'+SECTIONS[k].enfants+' enfants</small></button>').join('')+
+    '</div><p class="mut">Pour la direction, utilisez le bouton « Direction » en haut à droite.</p></div>'+foot();
+}
+function vHome(){
+  const k=DB.cfg.section,sc=SECTIONS[k],pr=presentIn(k),ok=pr.length>=sc.min;
+  const p=prog(k,ymd(new Date()),tickMap());
+  return head('Section '+sc.nom,sc.col)+'<main class="home"><section class="card"><h2>Présentes maintenant</h2>'+
+    '<div class="gauge '+(ok?'ok':'low')+'"><b>'+pr.length+'</b><span>sur '+sc.min+' minimum<br>'+sc.enfants+' enfants dans la section</span></div>'+
+    (pr.length?pr.map(x=>'<span class="chip">'+esc(x.nom)+' · depuis '+hm(x.ts)+'</span>').join(''):'<p class="mut">Personne n’est pointé dans cette section.</p>')+
+    '</section><section class="actions"><button class="big act1" data-a="punch">Pointer<small>arrivée ou départ</small></button>'+
+    '<button class="big act2" data-a="tasks">Tâches<small>aujourd’hui '+p.d+'/'+p.dt+' · semaine '+p.w+'/'+p.wt+'</small></button></section></main>'+foot();
+}
+function vPunch(){
+  const k=DB.cfg.section,pm=presenceMap(ymd(new Date()));
+  return head('Qui pointe ?',SECTIONS[k].col,'home')+'<main><div class="grid">'+STAFF.map(s=>{
+    const p=pm[s.id];let cls='staff',sub='Arrivée';
+    if(p&&p.type==='in'){
+      if(p.section===k){cls+=' here';sub='Présente depuis '+hm(p.ts)+' · Départ'}
+      else{cls+=' else';sub='Pointée en '+SECTIONS[p.section].nom+' · Passer ici'}
+    }
+    return '<button class="'+cls+'" data-a="who" data-s="'+s.id+'">'+esc(s.nom)+'<small>'+sub+'</small></button>';
+  }).join('')+'</div></main>';
+}
+function vPin(){
+  const dir=S.pinTarget==='dir';
+  const title=dir?'Accès direction':'Bonjour '+nomStaff(S.pinTarget);
+  const col=DB.cfg.section?SECTIONS[DB.cfg.section].col:'var(--acc)';
+  return head(title,col,'pinback')+'<main class="center pinpad"><p>Entrez votre code à 4 chiffres</p><div class="dots">'+
+    [0,1,2,3].map(i=>'<i class="'+(i<S.pin.length?'on':'')+'"></i>').join('')+'</div><p class="err">'+(S.err||'')+'</p><div class="keys">'+
+    [1,2,3,4,5,6,7,8,9].map(n=>'<button data-a="k" data-v="'+n+'">'+n+'</button>').join('')+
+    '<button class="sm" data-a="kc">Effacer</button><button data-a="k" data-v="0">0</button><span></span></div></main>';
+}
+function vDone(){
+  const d=S.done;
+  return head('Pointage',d.col)+'<main class="donebox"><div class="tick">✓</div><h2>'+esc(d.msg)+'</h2><p class="mut">'+esc(d.sub)+'</p>'+
+    '<div class="btns" style="justify-content:center"><button data-a="home">OK</button><button data-a="undo">Annuler ce pointage</button></div></main>';
+}
+function vTasks(){
+  const k=DB.cfg.section,sc=SECTIONS[k],today=ymd(new Date()),map=tickMap(),pr=presentIn(k);
+  if(pr.length===1)S.who=pr[0].staff;
+  else if(!pr.some(x=>x.staff===S.who))S.who=null;
+  const p=prog(k,today,map),pct=p.dt?Math.round(100*p.d/p.dt):0;
+  let h=head('Tâches · '+sc.nom,sc.col,'home')+'<main>';
+  if(!pr.length)h+='<div class="banner">Personne n’est pointé dans cette section. Pointez votre arrivée pour pouvoir cocher des tâches.</div>';
+  else if(pr.length>1)h+='<div class="who"><span class="mut" style="align-self:center">Je suis :</span>'+pr.map(x=>'<button class="'+(S.who===x.staff?'on':'')+'" data-a="iam" data-s="'+x.staff+'">'+esc(x.nom)+'</button>').join('')+'</div>';
+  h+='<div class="card"><b>Aujourd’hui : '+p.d+' sur '+p.dt+'</b> · cette semaine : '+p.w+' sur '+p.wt+'<div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+  /* Une tâche hebdomadaire cochée un jour précédent disparaît jusqu'à son échéance (7 jours après). */
+  const masked=t=>{const x=t.f==='s'?doneOf(map,k,t,today):null;return !!x&&x.date!==today};
+  const nMasked=tasksFor(k).filter(masked).length;
+  MOMENTS.forEach(m=>{
+    const l=tasksFor(k).filter(t=>t.m===m&&!masked(t));if(!l.length)return;
+    h+='<div class="moment">'+m+'</div>';
+    l.forEach(t=>{
+      const x=doneOf(map,k,t,today);
+      const ask=x&&S.askUntick===t.id;
+      h+='<button class="task '+(ask?'ask':x?'d':'')+'" data-a="tick" data-t="'+t.id+'"><span class="box">'+(x?(ask?'?':'✓'):'')+'</span><span>'+esc(t.l)+'</span>'+(ask?'<span class="by"><b>Appuyer encore pour décocher</b></span>':x?'<span class="by">'+esc(x.nom)+' · '+x.h+'</span>':'')+'</button>';
+    });
+  });
+  if(nMasked)h+='<p class="mut" style="margin-top:18px">'+nMasked+' tâche(s) hebdomadaire(s) déjà faite(s) : elles reviendront à leur échéance, 7 jours après.</p>';
+  return h+'</main>';
+}
+function opts(list,sel){return list.map(o=>'<option value="'+o[0]+'"'+(o[0]===sel?' selected':'')+'>'+esc(o[1])+'</option>').join('')}
+function vDir(){
+  const wk=S.dirTab==='semaine',d0=parse(S.dirDate);
+  const title=wk?'Semaine du '+fmtDate(ymd(mondayOf(d0))):fmtDate(S.dirDate)+' '+d0.getFullYear();
+  let h=head('Direction',null,'dirquit')+'<main><div class="tabs">'+
+    [['jour','Jour'],['semaine','Semaine'],['reglages','Réglages et export']].map(t=>'<button class="'+(S.dirTab===t[0]?'on':'')+'" data-a="dtab" data-t="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>';
+  if(S.dirTab!=='reglages'){
+    h+='<div class="bar2"><button data-a="dd" data-n="-1">‹</button><b>'+title+'</b><button data-a="dd" data-n="1">›</button><button data-a="dnow">Aujourd’hui</button>'+
+      '<select data-c="dsec">'+opts([['*','Toutes les sections']].concat(Object.keys(SECTIONS).map(k=>[k,SECTIONS[k].nom])),S.dirSec)+'</select>'+
+      '<select data-c="dstaff">'+opts([['*','Toutes les employées']].concat(STAFF.map(s=>[s.id,s.nom])),S.dirStaff)+'</select></div>';
+    h+=wk?bSemaine():bJour();
+  }else h+=bReglages();
+  return h+'</main>';
+}
+function secList(){return Object.keys(SECTIONS).filter(k=>S.dirSec==='*'||S.dirSec===k)}
+function staffList(){return STAFF.filter(s=>S.dirStaff==='*'||S.dirStaff===s.id)}
+function bJour(){
+  const date=S.dirDate,map=tickMap(),today=ymd(new Date());
+  const rows=staffList().map(s=>({s:s,st:dayStats(date,s.id)})).filter(r=>S.dirSec==='*'||r.st.secs.indexOf(S.dirSec)>=0);
+  let h='<div class="card"><h2>Heures</h2>';
+  if(!rows.length)h+='<p class="mut">Aucun pointage pour ce filtre.</p>';
+  else{
+    h+='<table><thead><tr><th>Employée</th><th>Section</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>État</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const st=r.st;let etat='Absente',tot='–';
+      if(st.first!==null){
+        tot=dur(st.ms+(st.ongoing?Date.now()-st.openAt:0));
+        etat=st.missing?'<span class="flag">Départ oublié</span> <input type="time" id="fix_'+r.s.id+'" style="width:120px"> <button data-a="fix" data-s="'+r.s.id+'" data-d="'+date+'">Corriger</button>':st.ongoing?'Présente':'OK';
+      }
+      h+='<tr><td>'+esc(r.s.nom)+'</td><td>'+(st.secs.map(k=>SECTIONS[k].nom).join(', ')||'–')+'</td><td>'+(st.first?hm(st.first):'–')+'</td><td>'+(st.last&&!st.open?hm(st.last):'–')+'</td><td>'+tot+'</td><td>'+etat+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='</div>';
+  secList().forEach(k=>{
+    const sc=SECTIONS[k],p=prog(k,date,map),pct=p.dt?Math.round(100*p.d/p.dt):0;
+    h+='<div class="card"><h2 style="color:'+sc.col+'">'+sc.nom+' : '+p.d+' tâches sur '+p.dt+' (semaine '+p.w+'/'+p.wt+')</h2><div class="bar"><i style="width:'+pct+'%"></i></div>';
+    const per={};Object.keys(map).forEach(key=>{const x=map[key];if(x.done&&x.date===date&&x.section===k&&(S.dirStaff==='*'||x.staff===S.dirStaff))per[x.nom]=(per[x.nom]||0)+1});
+    const names=Object.keys(per);
+    h+='<p class="mut">'+(names.length?names.map(n=>esc(n)+' : '+per[n]).join(' · '):'Aucune tâche cochée')+'</p>';
+    if(date<=today){
+      const und=tasksFor(k).filter(t=>t.f==='j'&&!doneOf(map,k,t,date));
+      if(und.length)h+='<b>Non faites</b><ul class="undone">'+und.map(t=>'<li>'+esc(t.l)+'</li>').join('')+'</ul>';
+      const late=tasksFor(k).filter(t=>t.f==='s'&&!weeklyState(k,t,date)).map(t=>{
+        const l=DB.ticks.filter(x=>x.section===k&&x.task===t.id&&x.done&&x.date<=date).sort((a,b)=>a.ts-b.ts).pop();
+        let info='jamais cochée';
+        if(l){const n=diffDays(date,l.date)-7;info='dernière fois le '+fmtDate(l.date)+', '+(n<=0?'à faire aujourd’hui':'en retard de '+n+' j')}
+        return esc(t.l)+' <span class="mut">('+info+')</span>';
+      });
+      if(late.length)h+='<div style="margin-top:10px"><b>Hebdomadaires à faire ou en retard</b><ul class="undone">'+late.map(s=>'<li>'+s+'</li>').join('')+'</ul></div>';
+    }
+    h+='</div>';
+  });
+  return h;
+}
+function weekDays(){const mon=mondayOf(parse(S.dirDate));return[0,1,2,3,4].map(i=>ymd(addDays(mon,i)))}
+function bSemaine(){
+  const days=weekDays(),map=tickMap(),today=ymd(new Date());
+  let h='<div class="card"><h2>Heures par employée</h2><table><thead><tr><th>Employée</th>'+days.map(d=>'<th class="n">'+fmtDate(d)+'</th>').join('')+'<th class="n">Total</th></tr></thead><tbody>';
+  staffList().forEach(s=>{
+    let tot=0,cells='';
+    days.forEach(d=>{
+      const st=dayStats(d,s.id);
+      if(S.dirSec!=='*'&&st.secs.indexOf(S.dirSec)<0){cells+='<td class="n">–</td>';return}
+      if(st.first===null){cells+='<td class="n">–</td>';return}
+      tot+=st.ms;cells+='<td class="n'+(st.missing?' c-warn':'')+'">'+dur(st.ms)+(st.missing?' ⚠':'')+'</td>';
+    });
+    h+='<tr><td>'+esc(s.nom)+'</td>'+cells+'<td class="n"><b>'+dur(tot)+'</b></td></tr>';
+  });
+  h+='</tbody></table><p class="mut">⚠ : départ oublié, heures non comptées. Corrigez-le dans l’onglet Jour.</p></div>';
+  h+='<div class="card"><h2>Tâches faites par section</h2><table><thead><tr><th>Section</th>'+days.map(d=>'<th class="n">'+fmtDate(d)+'</th>').join('')+'<th class="n">Hebdo</th></tr></thead><tbody>';
+  secList().forEach(k=>{
+    let cells='';
+    days.forEach(d=>{
+      if(d>today){cells+='<td class="n">–</td>';return}
+      const p=prog(k,d,map),pct=p.dt?100*p.d/p.dt:0;
+      cells+='<td class="n '+(pct>=90?'c-ok':pct>=60?'c-warn':'c-bad')+'">'+p.d+'/'+p.dt+'</td>';
+    });
+    const pw=prog(k,days[4]>today?today:days[4],map);
+    h+='<tr><td>'+SECTIONS[k].nom+'</td>'+cells+'<td class="n '+(pw.w===pw.wt?'c-ok':'c-warn')+'">'+pw.w+'/'+pw.wt+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div class="card"><h2>Tâches cochées par employée</h2><table><thead><tr><th>Employée</th>'+days.map(d=>'<th class="n">'+fmtDate(d)+'</th>').join('')+'<th class="n">Total</th></tr></thead><tbody>';
+  staffList().forEach(s=>{
+    let tot=0,cells='';
+    days.forEach(d=>{
+      const n=Object.keys(map).filter(key=>{const x=map[key];return x.done&&x.staff===s.id&&x.date===d&&(S.dirSec==='*'||x.section===S.dirSec)}).length;
+      tot+=n;cells+='<td class="n">'+(n||'–')+'</td>';
+    });
+    h+='<tr><td>'+esc(s.nom)+'</td>'+cells+'<td class="n"><b>'+tot+'</b></td></tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+function lienTablette(k){return location.origin+location.pathname+'?section='+k+'&url='+encodeURIComponent(DB.cfg.url)+'&key='+encodeURIComponent(DB.cfg.key)}
+function cardLiens(){
+  const t='<div class="card"><h2>Liens de configuration des tablettes</h2>';
+  if(!DB.cfg.url)return t+'<p class="mut">Renseignez d’abord l’adresse du Sheet et la clé dans la carte ci-dessus.</p></div>';
+  if(location.protocol==='file:')return t+'<p class="mut">Disponible quand l’application est en ligne (adresse qui commence par https).</p></div>';
+  return t+'<p class="mut">Ouvrez le lien de chaque section sur la tablette correspondante : elle se règle toute seule.</p>'+
+    Object.keys(SECTIONS).map(k=>'<label>'+SECTIONS[k].nom+'</label><div class="btns"><input type="text" id="lien_'+k+'" readonly value="'+esc(lienTablette(k))+'" style="flex:1"><button data-a="copylink" data-k="'+k+'">Copier</button></div>').join('')+'</div>';
+}
+function bReglages(){
+  return '<div class="card"><h2>Cette tablette</h2><label>Section de cette tablette</label><select data-c="cfgsec">'+
+    opts(Object.keys(SECTIONS).map(k=>[k,SECTIONS[k].nom]),DB.cfg.section)+'</select></div>'+
+  '<div class="card"><h2>Liaison avec le Google Sheet</h2><label>Adresse de l’application web (Apps Script)</label><input type="url" data-c="cfgurl" value="'+esc(DB.cfg.url)+'" placeholder="https://script.google.com/macros/s/…/exec">'+
+    '<label>Clé secrète (la même que dans le script)</label><input type="text" data-c="cfgkey" value="'+esc(DB.cfg.key)+'">'+
+    '<div class="btns"><button data-a="syncnow">Synchroniser maintenant</button><button data-a="pull">Charger les données du Sheet</button></div>'+
+    '<p class="mut">En attente d’envoi : '+DB.queue.length+'</p></div>'+
+  cardLiens()+'<div class="card"><h2>Export CSV (Excel)</h2><div class="btns"><button data-a="exp" data-t="punch">Pointages</button><button data-a="exp" data-t="tasks">Tâches faites</button><button data-a="exp" data-t="hours">Heures de la semaine affichée</button></div></div>'+
+  '<div class="card"><h2>Prototype</h2><div class="btns"><button data-a="demo">Générer des données de démonstration</button><button data-a="wipe">Effacer toutes les données de cette tablette</button></div>'+
+    '<p class="mut">Codes de démonstration : employées 1111 à 5555 (dans l’ordre de la liste), direction 0000.</p></div>';
+}
+
+function render(){
+  const y=window.scrollY;
+  const v={setup:vSetup,home:vHome,punch:vPunch,pin:vPin,done:vDone,tasks:vTasks,dir:vDir}[S.view];
+  app.innerHTML=v();
+  window.scrollTo(0,y);
+}
+
+/* ===== Actions ===== */
+function check(){
+  if(S.pinTarget==='dir'){
+    if(S.pin===DIRECTION_PIN){S.pin='';S.err='';S.dirDate=ymd(new Date());go('dir');return}
+  }else{
+    const s=staffById(S.pinTarget);
+    if(s&&s.pin===S.pin){S.pin='';S.err='';doPunch(s.id);return}
+  }
+  S.pin='';S.err='Code incorrect';render();
+}
+function doPunch(id){
+  const sec=DB.cfg.section||'P',today=ymd(new Date()),pm=presenceMap(today)[id],now=Date.now(),nom=nomStaff(id);
+  let msg,undo=[];
+  if(pm&&pm.type==='in'){
+    if(pm.section===sec){
+      const r=addPunch(id,sec,'out');undo=[r];msg='Départ enregistré à '+r.h;
+    }else{
+      const r1=addPunch(id,pm.section,'out',{ts:now});const r2=addPunch(id,sec,'in',{ts:now});
+      undo=[r1,r2];msg='Changement de section à '+r2.h;
+    }
+  }else{
+    const r=addPunch(id,sec,'in');undo=[r];msg='Arrivée enregistrée à '+r.h;
+  }
+  S.done={msg:msg,sub:nom,undo:undo,col:SECTIONS[sec].col};
+  go('done');
+  clearTimeout(doneTimer);
+  doneTimer=setTimeout(()=>{if(S.view==='done')go('home')},8000);
+}
+function dlCsv(name,rows){
+  const csv='\ufeff'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+}
+function exportCsv(t){
+  const sn=k=>SECTIONS[k]?SECTIONS[k].nom:k;
+  if(t==='punch'){
+    dlCsv('pointages.csv',[['Date','Heure','Employée','Section','Type','Corrigé par la direction']].concat(
+      validPunches().map(p=>[p.date,p.h,p.nom,sn(p.section),p.type==='in'?'Arrivée':'Départ',p.corr?'oui':''])));
+  }else if(t==='tasks'){
+    const map=tickMap(),mo={};TASKS.forEach(x=>mo[x.id]=x);
+    dlCsv('taches.csv',[['Date','Heure','Section','Moment','Tâche','Fréquence','Employée']].concat(
+      Object.keys(map).map(k=>map[k]).filter(x=>x.done).sort((a,b)=>a.ts-b.ts).map(x=>[x.date,x.h,sn(x.section),mo[x.task]?mo[x.task].m:'',x.label,mo[x.task]&&mo[x.task].f==='s'?'hebdo':'jour',x.nom])));
+  }else{
+    const rows=[['Employée'].concat(weekDays()).concat(['Total'])];
+    STAFF.forEach(s=>{let tot=0;const c=weekDays().map(d=>{const st=dayStats(d,s.id);tot+=st.ms;return st.first===null?'':dur(st.ms)+(st.missing?' (départ oublié)':'')});rows.push([s.nom].concat(c).concat([dur(tot)]))});
+    dlCsv('heures-semaine.csv',rows);
+  }
+}
+function genDemo(){
+  const asg={s1:'P',s2:'M',s3:'M',s4:'G',s5:'G'},now=Date.now(),rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  const at=(d,m)=>new Date(d.getFullYear(),d.getMonth(),d.getDate(),Math.floor(m/60),m%60).getTime();
+  const rng={Ouverture:[465,510],'Matinée':[540,690],Midi:[720,780],'Après-midi':[840,990],Fermeture:[1000,1050],'Chaque semaine':[600,900]};
+  for(let back=13;back>=0;back--){
+    const d=addDays(new Date(),-back),wd=d.getDay();if(wd===0||wd===6)continue;
+    const ds=ymd(d);
+    STAFF.forEach(s=>{
+      const tin=at(d,rnd(450,510)),tout=at(d,rnd(960,1050));
+      if(tin<=now)addPunch(s.id,asg[s.id],'in',{ts:tin},true);
+      if(tout<=now&&!(back===3&&s.id==='s3'))addPunch(s.id,asg[s.id],'out',{ts:tout},true);
+    });
+    Object.keys(SECTIONS).forEach(k=>{
+      const crew=STAFF.filter(s=>asg[s.id]===k);
+      tasksFor(k).forEach(t=>{
+        if(t.f==='s'&&wd!==4)return;
+        if(Math.random()>(t.f==='s'?0.85:0.9))return;
+        const r=rng[t.m],ts=at(d,rnd(r[0],r[1]));if(ts>now)return;
+        addTick(k,t,crew[rnd(0,crew.length-1)].id,true,ds,ts,true);
+      });
+    });
+  }
+  save();
+}
+function act(a,d){
+  switch(a){
+    case 'setsec':DB.cfg.section=d.k;save();go('home');break;
+    case 'home':go('home');break;
+    case 'punch':go('punch');break;
+    case 'tasks':go('tasks');break;
+    case 'who':S.pinTarget=d.s;S.pin='';S.err='';go('pin');break;
+    case 'dirlogin':S.pinTarget='dir';S.pin='';S.err='';go('pin');break;
+    case 'pinback':S.pin='';S.err='';go(S.pinTarget==='dir'?(DB.cfg.section?'home':'setup'):'punch');break;
+    case 'k':if(S.pin.length<4){S.pin+=d.v;S.err='';if(S.pin.length===4)check();else render()}break;
+    case 'kc':S.pin='';S.err='';render();break;
+    case 'undo':
+      S.done.undo.forEach(r=>addPunch(r.staff,r.section,'void',{ref:r.id}));
+      toast('Pointage annulé');go('home');break;
+    case 'iam':S.who=d.s;render();break;
+    case 'tick':{
+      const k=DB.cfg.section,t=TASKS.find(x=>x.id===d.t),today=ymd(new Date()),x=doneOf(tickMap(),k,t,today);
+      if(x){
+        /* Décocher : deuxième appui pour confirmer, sans boîte de dialogue du navigateur */
+        if(S.askUntick===d.t){S.askUntick=null;addTick(k,t,S.who||x.staff,false,today);render()}
+        else{
+          S.askUntick=d.t;render();clearTimeout(untickTimer);
+          untickTimer=setTimeout(()=>{if(S.askUntick){S.askUntick=null;if(S.view==='tasks')render()}},4000);
+        }
+        break;
+      }
+      if(!S.who){toast('Pointez votre arrivée ou choisissez votre nom en haut');return}
+      addTick(k,t,S.who,true,today);
+      render();break;
+    }
+    case 'dirquit':go(DB.cfg.section?'home':'setup');break;
+    case 'dtab':S.dirTab=d.t;render();break;
+    case 'dd':{const n=Number(d.n)*(S.dirTab==='semaine'?7:1);S.dirDate=ymd(addDays(parse(S.dirDate),n));render();break}
+    case 'dnow':S.dirDate=ymd(new Date());render();break;
+    case 'fix':{
+      const v=document.getElementById('fix_'+d.s).value;
+      if(!v){toast('Indiquez l’heure de départ');return}
+      const ts=new Date(d.d+'T'+v).getTime(),st=dayStats(d.d,d.s);
+      if(!(ts>st.openAt)){toast('L’heure de départ doit suivre l’arrivée');return}
+      const last=validPunches().filter(p=>p.date===d.d&&p.staff===d.s&&p.type==='in').pop();
+      addPunch(d.s,last.section,'out',{ts:ts,corr:true});
+      toast('Départ corrigé');render();break;
+    }
+    case 'syncnow':syncPush().then(()=>{toast(DB.queue.length?'Envoi impossible pour le moment':'Synchronisé');render()});break;
+    case 'pull':syncPull().then(ok=>{toast(ok?'Données chargées':'Chargement impossible');render()});break;
+    case 'copylink':{
+      const el=document.getElementById('lien_'+d.k);el.focus();el.select();
+      let ok=false;try{ok=document.execCommand('copy')}catch(e){}
+      if(!ok&&navigator.clipboard)navigator.clipboard.writeText(el.value);
+      toast('Lien copié');break;
+    }
+    case 'exp':exportCsv(d.t);break;
+    case 'demo':genDemo();toast('Données de démonstration ajoutées');render();break;
+    case 'wipe':if(confirm('Effacer toutes les données de cette tablette ?')){const c=DB.cfg;DB=init();DB.cfg=c;save();render()}break;
+  }
+}
+app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b)act(b.dataset.a,b.dataset)});
+app.addEventListener('change',e=>{
+  const c=e.target.dataset.c;if(!c)return;const v=e.target.value;
+  if(c==='dsec')S.dirSec=v;
+  else if(c==='dstaff')S.dirStaff=v;
+  else if(c==='cfgsec')DB.cfg.section=v;
+  else if(c==='cfgurl')DB.cfg.url=v.trim();
+  else if(c==='cfgkey')DB.cfg.key=v.trim();
+  save();render();
+});
+setInterval(()=>{if(S.view==='home')render()},30000);
+render();
+syncPush();
+})();
+</script>
+</body>
+</html>
